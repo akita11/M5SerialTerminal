@@ -90,10 +90,13 @@ char RXbuf[RXbufSize];
 uint16_t pRXbuf_w = 0, pRXbuf_r = 0;
 
 // get char from CardKBD
-char getKey(){
-	char c;
-	c = M5.Ex_I2C.readRegister8(0x5f, 0x00, 400000);
-	return c;
+uint8_t getKey(){
+	uint8_t c[2];
+//	c = M5.Ex_I2C.readRegister8(0x5f, 0x00, 400000);
+	M5.Ex_I2C.start(0x5f, true, 400000);
+	M5.Ex_I2C.read(c, 1);
+	M5.Ex_I2C.stop();
+	return c[0];
 }	
 
 
@@ -118,6 +121,7 @@ void setup() {
 
 void loop() {
 	M5.update();
+	printf("%02x\n", getKey());
 	while (Terminal.available()){
 		RXbuf[pRXbuf_w] = Serial.read();
 		pRXbuf_w++; if (pRXbuf_w == RXbufSize) pRXbuf_w = 0;
