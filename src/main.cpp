@@ -10,9 +10,11 @@ M5Canvas canvas(&M5.Lcd);
 // 追加したい機能
 // - キーボード入力→送信
 
-// PortC of Basic
-#define PIN_RXD 16
-#define PIN_TXD 17
+// PortA/C of Basic
+uint8_t pinRXD[] = {22, 16};
+uint8_t pinTXD[] = {21, 17};
+uint16_t menuColor[] = {RED, CYAN};
+uint8_t stPort = 0;
 
 // Terminal to monitor
 #define Terminal Serial
@@ -37,7 +39,7 @@ uint8_t stBinary = 0;
 
 void setBinaryMode(uint8_t stBinary)
 {
-	canvas.fillRect(34, 224, 64, 16, WHITE);
+	canvas.fillRect(34, 224, 64, 16, menuColor[stPort]);
 	canvas.setCursor(40, 224);
 	canvas.setTextColor(BLACK);
 	if (stBinary == 0) canvas.printf("Text");
@@ -48,18 +50,18 @@ void setBinaryMode(uint8_t stBinary)
 
 void setBaud(uint8_t stBaud)
 {
-	canvas.fillRect(128, 224, 64, 16, WHITE);
+	canvas.fillRect(128, 224, 64, 16, menuColor[stPort]);
 	canvas.setTextColor(BLACK);
 	canvas.setCursor(135, 224); canvas.printf("%d", baud[stBaud]);
 	canvas.setTextColor(WHITE);
 	canvas.pushSprite(0, 0);
 	Terminal.end();
-	Terminal.begin(baud[stBaud], SERIAL_8N1, PIN_RXD, PIN_TXD);
+	Terminal.begin(baud[stBaud], SERIAL_8N1, pinRXD[stPort], pinTXD[stPort]);
 }
 
 void setTerminalCode(uint8_t stTerminalCode)
 {
-	canvas.fillRect(222, 224, 64, 16, WHITE);
+	canvas.fillRect(222, 224, 64, 16, menuColor[stPort]);
 	canvas.setCursor(240, 224);
 	canvas.setTextColor(BLACK);
 	if (stTerminalCode == 0) canvas.printf("CR");
@@ -69,19 +71,15 @@ void setTerminalCode(uint8_t stTerminalCode)
 	canvas.pushSprite(0, 0);
 }
 
-void scroll_disp() {
-	for (int i = 1; i < N_LINE; i++) {
-		row[i-1] = row[i];
-	}
+void scroll() {
+	for (uint8_t i = 1; i < N_LINE; i++) row[i-1] = row[i];
 	row[N_LINE - 1] = "";
 }
 
-void disp_out() {
+void display() {
 	canvas.fillRect(0, 0, 320, 224, BLACK);
 	canvas.setCursor(0, 0);
-	for (int i = 0; i < N_LINE; i++) {
-		canvas.println(row[i]);
-	}
+	for (int i = 0; i < N_LINE; i++) canvas.println(row[i]);
 	canvas.pushSprite(0, 0);
 }
 
@@ -122,6 +120,10 @@ void setup() {
 void loop() {
 	M5.update();
 	printf("%02x\n", getKey());
+
+	if (getKey() != 0){
+		Terminal.write(getKey());			
+	}
 	while (Terminal.available()){
 		RXbuf[pRXbuf_w] = Serial.read();
 		pRXbuf_w++; if (pRXbuf_w == RXbufSize) pRXbuf_w = 0;
@@ -132,7 +134,7 @@ void loop() {
 		pRXbuf_r++; if (pRXbuf_r == RXbufSize) pRXbuf_r = 0;
 		if (c == '\n') {
 			c_cnt = 0;
-			scroll_disp();
+			scroll();
 		} 
 		else {
 			if (stBinary == 0){
@@ -144,8 +146,8 @@ void loop() {
 				}
 				if (c_cnt >= 39) {
 					c_cnt = 0;
-					scroll_disp();
-					disp_out();
+					scroll();
+					display();
 				}
 				row[N_LINE - 1] += c;
 			}
@@ -156,15 +158,15 @@ void loop() {
 				c_cnt += 3;
 				if (c_cnt >= 38) {
 					c_cnt = 0;
-					scroll_disp();
-					disp_out();
+					scroll();
+					display();
 				}
 			}
 		}
 	}
 	if (disp_set == 1) {
 		disp_set = 0;
-		disp_out();
+		display();
 	}
 
 	if (M5.BtnA.wasPressed()) {
@@ -172,8 +174,23 @@ void loop() {
 		setBinaryMode(stBinary);
 	}
 	if (M5.BtnB.wasPressed()) {
-		stBaud = (stBaud + 1) % N_BAUD;
-		setBaud(stBaud);
+		uint8_t tm = 0;
+		while(M5.BtnB.isPressed() && tm < 20) {
+			tm++;
+			delay(100);
+		}
+		if (tm < 20){
+			// short B ppress
+			stBaud = (stBaud + 1) % N_BAUD;
+			setBaud(stBaud);
+		}
+		else{
+			// long B ppress
+			stPort = (stPort + 1) % 2;
+			setBaud(stBaud);
+			setBinaryMode(stBinary);
+			setTerminalCode(stTerminalCode);
+		}
 	}
 	if (M5.BtnC.wasPressed()) {
 		stTerminalCode = (stTerminalCode + 1) % N_TERMINAL_CODE;
