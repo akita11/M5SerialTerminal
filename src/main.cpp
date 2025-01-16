@@ -3,8 +3,6 @@
 // Based from serial_monitor.ino
 // https://logikara.blog/serial_monitor/
 
-M5Canvas canvas(&M5.Lcd);
-
 // ToDo:
 // - Hex from CardKBD and send binary 
 
@@ -16,12 +14,6 @@ uint8_t stPort = 0;
 
 // Terminal to monitor
 #define Terminal Serial1
-
-#define N_LINE 14
-char c;
-int c_cnt = -1;
-String row[N_LINE] = {};
-bool disp_set = 0;
 
 uint8_t stBaud = 0;
 #define N_BAUD 3
@@ -37,22 +29,21 @@ uint8_t stBinary = 0;
 
 void setBinaryMode(uint8_t stBinary)
 {
-	canvas.fillRect(34, 224, 64, 16, menuColor[stPort]);
-	canvas.setCursor(40, 224);
-	canvas.setTextColor(BLACK);
-	if (stBinary == 0) canvas.printf("Text");
-	else canvas.printf("Binary");
-	canvas.setTextColor(WHITE);
-	canvas.pushSprite(0, 0);
+	M5.Display.fillRect(34, 224, 64, 16, menuColor[stPort]);
+	M5.Display.setCursor(40, 224);
+	M5.Display.setTextColor(BLACK, menuColor[stPort]);
+	if (stBinary == 0) M5.Display.printf("Text");
+	else M5.Display.printf("Binary");
+	M5.Display.setTextColor(WHITE, BLACK);
 }
 
 void setBaud(uint8_t stBaud)
 {
-	canvas.fillRect(128, 224, 64, 16, menuColor[stPort]);
-	canvas.setTextColor(BLACK);
-	canvas.setCursor(135, 224); canvas.printf("%d", baud[stBaud]);
-	canvas.setTextColor(WHITE);
-	canvas.pushSprite(0, 0);
+	M5.Display.fillRect(128, 224, 64, 16, menuColor[stPort]);
+	M5.Display.setTextColor(BLACK, menuColor[stPort]);
+	M5.Display.setCursor(135, 224);
+	M5.Display.printf("%d", baud[stBaud]);
+	M5.Display.setTextColor(WHITE, BLACK);
 	Terminal.end();
 	Terminal.begin(baud[stBaud], SERIAL_8N1, pinRXD[stPort], pinTXD[stPort]);
 	if (stPort == 1) 	M5.Ex_I2C.begin();
@@ -64,26 +55,13 @@ void setBaud(uint8_t stBaud)
 
 void setTerminalCode(uint8_t stTerminalCode)
 {
-	canvas.fillRect(222, 224, 64, 16, menuColor[stPort]);
-	canvas.setCursor(240, 224);
-	canvas.setTextColor(BLACK);
-	if (stTerminalCode == 0) canvas.printf("CR");
-	else if (stTerminalCode == 1) canvas.printf("LF");
-	else if (stTerminalCode == 2) canvas.printf("CRLF");
-	canvas.setTextColor(WHITE);
-	canvas.pushSprite(0, 0);
-}
-
-void scroll() {
-	for (uint8_t i = 1; i < N_LINE; i++) row[i-1] = row[i];
-	row[N_LINE - 1] = "";
-}
-
-void display() {
-	canvas.fillRect(0, 0, 320, 224, BLACK);
-	canvas.setCursor(0, 0);
-	for (int i = 0; i < N_LINE; i++) canvas.println(row[i]);
-	canvas.pushSprite(0, 0);
+	M5.Display.fillRect(222, 224, 64, 16, menuColor[stPort]);
+	M5.Display.setCursor(240, 224);
+	M5.Display.setTextColor(BLACK, menuColor[stPort]);
+	if (stTerminalCode == 0) M5.Display.printf("CR");
+	else if (stTerminalCode == 1) M5.Display.printf("LF");
+	else if (stTerminalCode == 2) M5.Display.printf("CRLF");
+	M5.Display.setTextColor(WHITE, BLACK);
 }
 
 #define RXbufSize 1024
@@ -99,24 +77,35 @@ uint8_t getKey(){
 	return c;
 }	
 
+/*
+	// setTextScroll 関数で、画面下端に到達した時のスクロール動作を指定します。
+  // setScrollRect 関数でスクロールする矩形範囲を指定します。(未指定時は画面全体がスクロールします)
+  // ※ スクロール機能は、LCDが画素読出しに対応している必要があります。
+  lcd.setTextScroll(true);
+
+  // 第１～第４引数で X Y Width Height の矩形範囲を指定し、第５引数でスクロール後の色を指定します。第５引数は省略可(省略時は変更なし)
+  lcd.setScrollRect(10, 10, lcd.width() - 20, lcd.height() - 20, 0x00001FU);
+*/
+
 void setup() {
 	auto cfg = M5.config();
 	M5.begin(cfg);
-	
-	canvas.setColorDepth(8);
-	canvas.createSprite(M5.Display.width(), M5.Display.height());
 
-	canvas.fillScreen(BLACK);
-	canvas.setTextColor(WHITE);
-	canvas.setFont(&fonts::lgfxJapanGothic_16);
-	canvas.printf("Serial Monitor\n");
+	M5.Display.fillScreen(BLACK);
+	M5.Display.setTextColor(WHITE);
+	M5.Display.setFont(&fonts::lgfxJapanGothic_16);
+	M5.Display.setScrollRect(0, 0, 320, 224);
+	M5.Display.setTextScroll(true);
+	M5.Display.printf("M5 Serial Monitor\n");
 	setBinaryMode(stBinary);
 	setBaud(stBaud);
 	setTerminalCode(stTerminalCode);
-	canvas.pushSprite(0, 0);
 }
 
+uint16_t c_cnt = 0;
+
 void loop() {
+	char c;
 	M5.update();
 	if (stPort == 1){
 		c = getKey();
@@ -135,8 +124,8 @@ void loop() {
 		RXbuf[pRXbuf_w] = Terminal.read();
 		pRXbuf_w++; if (pRXbuf_w == RXbufSize) pRXbuf_w = 0;
 	}
+
 	while(pRXbuf_w != pRXbuf_r){
-		disp_set = 1;
 		c = RXbuf[pRXbuf_r];
 		pRXbuf_r++; if (pRXbuf_r == RXbufSize) pRXbuf_r = 0;
 		uint8_t fTerm = 0;
@@ -144,12 +133,10 @@ void loop() {
 		|| ((stTerminalCode == 1)  && c == '\n')) {
 			fTerm = 1;
 		}
-		if (fTerm == 1){
-			c_cnt = 0;
-			scroll();
-		} 
+		if (fTerm == 1) M5.Display.printf("\n");
 		else {
 			if (stBinary == 0){
+				M5.Display.printf("%c", c);
 				if (c <= 0x7f) { // for ASCII
 					c_cnt++;
 				}
@@ -158,27 +145,18 @@ void loop() {
 				}
 				if (c_cnt >= 39) {
 					c_cnt = 0;
-					scroll();
-					display();
+					M5.Display.printf("\n");
 				}
-				row[N_LINE - 1] += c;
 			}
 			else{
-				if (c < 0x10) row[N_LINE - 1] += "0";
-				row[N_LINE - 1] +=String(c, HEX);
-				row[N_LINE - 1] += " ";
+				M5.Display.printf("%02x ", c);
 				c_cnt += 3;
 				if (c_cnt >= 38) {
 					c_cnt = 0;
-					scroll();
-					display();
+					M5.Display.printf("\n");
 				}
 			}
 		}
-	}
-	if (disp_set == 1) {
-		disp_set = 0;
-		display();
 	}
 
 	if (M5.BtnA.wasPressed()) {
